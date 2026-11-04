@@ -159,21 +159,21 @@ string GetName(int NameId)
 }
 
 // ✅ 修复：正确计算对象地址
-uint64_t GetAllObject(size_t id)
-{
-    constexpr size_t NUM_PER_CHUNK = 65536;
-    size_t chunkIdx = id / NUM_PER_CHUNK;
-    size_t inChunkIdx = id % NUM_PER_CHUNK;
-
-    uint64_t chunks = Read<uint64_t>(GObject); // ObjObjects -> chunk 数组
-    if (!chunks) return 0;
-
-    uint64_t chunkPtr = Read<uint64_t>(chunks + 8 * chunkIdx);
-    if (!chunkPtr) return 0;
-
-    uint64_t objectEntry = chunkPtr + inChunkIdx * 0x18; // 每个 UObjectItem 占 0x18 字节
-    return Read<uint64_t>(objectEntry);
-}
+//uint64_t GetAllObject(size_t id)
+//{
+//    constexpr size_t NUM_PER_CHUNK = 65536;
+//    size_t chunkIdx = id / NUM_PER_CHUNK;
+//    size_t inChunkIdx = id % NUM_PER_CHUNK;
+//
+//    uint64_t chunks = Read<uint64_t>(GObject); // ObjObjects -> chunk 数组
+//    if (!chunks) return 0;
+//
+//    uint64_t chunkPtr = Read<uint64_t>(chunks + 8 * chunkIdx);
+//    if (!chunkPtr) return 0;
+//
+//    uint64_t objectEntry = chunkPtr + inChunkIdx * 0x18; // 每个 UObjectItem 占 0x18 字节
+//    return Read<uint64_t>(objectEntry);
+//}
 
 string GetNameForObject(uint64_t Object)
 {
@@ -197,115 +197,115 @@ uint64_t GetOuter(uint64_t Object)
     return Object ? Read<uint64_t>(Object + 0x20) : 0;
 }
 
-string dumpObject(uint64_t Object)
-{
-    if (!Object) return "";
+//string dumpObject(uint64_t Object)
+//{
+//    if (!Object) return "";
+//
+//    string name = GetNameForObject(Object);
+//    if (name.empty() || name == "None") return "";
+//
+//    // 拼接 Outer 路径，限制深度防止死循环
+//    int depth = 0;
+//    for (uint64_t Outer = GetOuter(Object); Outer && depth < 10; Outer = GetOuter(Outer), ++depth)
+//    {
+//        string outerName = GetNameForObject(Outer);
+//        if (!outerName.empty() && outerName != "None") {
+//            name = outerName + "." + name;
+//        }
+//    }
+//
+//    uint64_t Class = GetClass(Object);
+//    string classname = GetNameForObject(Class);
+//    if (classname.empty()) classname = "UnknownClass";
+//
+//    return classname + " " + name;
+//}
 
-    string name = GetNameForObject(Object);
-    if (name.empty() || name == "None") return "";
-
-    // 拼接 Outer 路径，限制深度防止死循环
-    int depth = 0;
-    for (uint64_t Outer = GetOuter(Object); Outer && depth < 10; Outer = GetOuter(Outer), ++depth)
-    {
-        string outerName = GetNameForObject(Outer);
-        if (!outerName.empty() && outerName != "None") {
-            name = outerName + "." + name;
-        }
-    }
-
-    uint64_t Class = GetClass(Object);
-    string classname = GetNameForObject(Class);
-    if (classname.empty()) classname = "UnknownClass";
-
-    return classname + " " + name;
-}
-
-void dump()
-{
-    uint32_t ObjectCount = Read<uint32_t>(GObject + 0x14); // ObjObjects+0x14 通常是 NumElements
-    if (ObjectCount == 0 || ObjectCount > 1000000) {
-        printf("[-] 对象数量异常: %d\n", ObjectCount);
-        return;
-    }
-
-    CreateDirectoryA("FadeoutSDK", NULL);
-
-    // 打开文件并设置 UTF-8 编码
-    ofstream file(OUTPUT_FILE, ios::out | ios::binary);
-    if (!file.is_open()) {
-        printf("[-] 无法创建文件: %s\n", OUTPUT_FILE);
-        return;
-    }
-
-    // 设置 UTF-8 输出
-    file.imbue(locale(file.getloc(), new codecvt_utf8<char>));
-
-    printf("[+] 开始扫描 %d 个对象...\n", ObjectCount);
-    int validCount = 0;
-
-    for (size_t i = 0; i < ObjectCount; i++)
-    {
-        if (i % 10000 == 0) {
-            printf("[*] 已扫描 %zu / %d\n", i, ObjectCount);
-        }
-
-        uint64_t Object = GetAllObject(i);
-        string desc = dumpObject(Object);
-        if (!desc.empty()) {
-            file << "[" << hex << uppercase << setfill('0') << setw(12) << Object << "] " << desc << endl;
-            validCount++;
-        }
-    }
-    file.close();
-    printf("[+] 扫描完成! 有效对象: %d / %d\n", validCount, ObjectCount);
-    printf("[+] 已保存到: %s\n", OUTPUT_FILE);
-}
+//void dump()
+//{
+//    uint32_t ObjectCount = Read<uint32_t>(GObject + 0x14); // ObjObjects+0x14 通常是 NumElements
+//    if (ObjectCount == 0 || ObjectCount > 1000000) {
+//        printf("[-] 对象数量异常: %d\n", ObjectCount);
+//        return;
+//    }
+//
+//    CreateDirectoryA("FadeoutSDK", NULL);
+//
+//    // 打开文件并设置 UTF-8 编码
+//    ofstream file(OUTPUT_FILE, ios::out | ios::binary);
+//    if (!file.is_open()) {
+//        printf("[-] 无法创建文件: %s\n", OUTPUT_FILE);
+//        return;
+//    }
+//
+//    // 设置 UTF-8 输出
+//    file.imbue(locale(file.getloc(), new codecvt_utf8<char>));
+//
+//    printf("[+] 开始扫描 %d 个对象...\n", ObjectCount);
+//    int validCount = 0;
+//
+//    for (size_t i = 0; i < ObjectCount; i++)
+//    {
+//        if (i % 10000 == 0) {
+//            printf("[*] 已扫描 %zu / %d\n", i, ObjectCount);
+//        }
+//
+//        uint64_t Object = GetAllObject(i);
+//        string desc = dumpObject(Object);
+//        if (!desc.empty()) {
+//            file << "[" << hex << uppercase << setfill('0') << setw(12) << Object << "] " << desc << endl;
+//            validCount++;
+//        }
+//    }
+//    file.close();
+//    printf("[+] 扫描完成! 有效对象: %d / %d\n", validCount, ObjectCount);
+//    printf("[+] 已保存到: %s\n", OUTPUT_FILE);
+//}
 
 
-uint64_t GetsObject(string name)
-{
-    //Class CoreUObject.Class
-    uint32_t ObjectCount = Read<uint32_t>(GObject + 0x14);
-    for (size_t i = 0; i < ObjectCount; i++)
-    {
-        uint64_t Object = GetAllObject(i);
-        if (dumpObject(Object) == name)
-        {
-            return Object;
-        }
-    }
-    return 0;
-}
+//uint64_t GetsObject(string name)
+//{
+//    //Class CoreUObject.Class
+//    uint32_t ObjectCount = Read<uint32_t>(GObject + 0x14);
+//    for (size_t i = 0; i < ObjectCount; i++)
+//    {
+//        uint64_t Object = GetAllObject(i);
+//        if (dumpObject(Object) == name)
+//        {
+//            return Object;
+//        }
+//    }
+//    return 0;
+//}
 
-bool FilterObjects(uint64_t Object)
-{
-    static   uint64_t obj = GetsObject("Class CoreUObject.Class");
-
-    for (uint64_t sobj = GetClass(Object); sobj; sobj= GetSuperClass(sobj))
-    {
-        if (sobj == obj)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-void test()
-{
-    uint32_t ObjectCount = Read<uint32_t>(GObject + 0x14);
-    for (size_t i = 0; i < ObjectCount; i++)
-    {
-        uint64_t Object = GetAllObject(i);
-        if (!Object)continue;
-        if (FilterObjects(Object))
-        {
-            printf("[%p]\n", Object);
-        }
-    }
-
-}
+//bool FilterObjects(uint64_t Object)
+//{
+//    static   uint64_t obj = GetsObject("Class CoreUObject.Class");
+//
+//    for (uint64_t sobj = GetClass(Object); sobj; sobj= GetSuperClass(sobj))
+//    {
+//        if (sobj == obj)
+//        {
+//            return true;
+//        }
+//    }
+//    return false;
+//}
+//
+//void test()
+//{
+//    uint32_t ObjectCount = Read<uint32_t>(GObject + 0x14);
+//    for (size_t i = 0; i < ObjectCount; i++)
+//    {
+//        uint64_t Object = GetAllObject(i);
+//        if (!Object)continue;
+//        if (FilterObjects(Object))
+//        {
+//            printf("[%p]\n", Object);
+//        }
+//    }
+//
+//}
 
 
 
@@ -316,8 +316,9 @@ void test()
 //        return 1;
 //    }
 //
+//	GetName(2);
 //    //dump();
-//    test();
+//    //test();
 //
 //
 //    printf("按任意键退出...\n");

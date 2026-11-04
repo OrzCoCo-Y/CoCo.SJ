@@ -71,6 +71,9 @@ static const wchar_t* GAME_EXE = L"DeathlyStillnessGame-Win64-Shipping.exe";
 // IDA 里显示 0x144916900，减去 PE 默认基址 0x140000000，就是 0x4916900
 static const uint64_t GNAME_OFFSET = 0x4916900;
 
+// IDA 里显示 0x144952C40，减去 PE 默认基址 0x140000000，就是 0x4952C40
+static const uint64_t GOBJECT_OFFSET = 0x4952C40;
+
 // 名字表能装多少块、每块多大，完全对应 UE 源码里的 FNameEntryAllocator：
 //
 //     enum { FNameMaxBlockBits    = 13 };                 // 为什么是 13？见下面注释
@@ -99,7 +102,7 @@ static const uint32_t STRIDE        = 2;                              // alignof
 static const uint32_t BLOCK_BYTES   = STRIDE * BLOCK_OFFSETS;         // 0x20000（128KB）
 
 // 遍历时最多打印多少条；0 表示全部（大约 13 万条，会刷很久）
-static const int PRINT_LIMIT = 500;
+static const int PRINT_LIMIT = 50;
 
 // ============================================================================
 //  全局变量：整个程序共用
@@ -109,6 +112,7 @@ static HANDLE   g_process    = NULL;   // 游戏进程句柄（相当于 C# 的 
 static DWORD    g_pid        = 0;      // 进程 ID
 static uint64_t g_moduleBase = 0;      // 游戏主模块的基址
 static uint64_t g_gname      = 0;      // GName 的地址
+static uint64_t g_object     = 0;      // GObject 的地址
 
 // ============================================================================
 //  第一步：读内存
@@ -440,6 +444,8 @@ static void Pause()
     getchar();
 }
 
+
+
 // ============================================================================
 //  main：程序入口（相当于 C# 的 static void Main）
 // ============================================================================
@@ -475,34 +481,73 @@ int main()
 
     printf("[+] Blocks[0]   : 0x%llX\n", (unsigned long long)block0);
 
+	g_object = g_moduleBase + GOBJECT_OFFSET;
+
+	// GUObjectArray + 0x10 = FChunkedFixedUObjectArray；其首字段就是 FUObjectItem** Objects
+	uint64_t objects = ReadU64(g_object + 0x10);
+	printf("[+] FUObjectItem** Objects : 0x%llX\n", (unsigned long long)objects);
+
+	// 跳过空槽，遍历出 10 个有效对象的 NameId
+	const uint32_t NUM_PER_CHUNK = 65536;
+	const uint32_t ITEM_SIZE     = 0x18;
+	const int      WANT         = 10;
+
+	printf("\n--- first %d NameIds ---\n", WANT);
+	int found = 0;
+	for (uint32_t i = 0; found < WANT && i < 100000; ++i)
+	{
+		uint32_t chunkIdx = i / NUM_PER_CHUNK;
+		uint32_t within   = i % NUM_PER_CHUNK;
+
+		uint64_t chunk = ReadU64(objects + (uint64_t)chunkIdx * 8);
+        printf("[+] chunk : 0x%llX\n", (unsigned long long)chunk);
+		if (chunk == 0)
+			break;
+
+		uint64_t obj = ReadU64(chunk + (uint64_t)within * ITEM_SIZE);
+        printf("[+] obj : 0x%llX\n", (unsigned long long)obj);
+		if (obj == 0)
+			continue;   // 空槽，跳过
+
+		uint32_t nameId = ReadU32(obj + 0x18);
+		std::string name = GetName(nameId);
+
+		printf("[%2d] idx=%u  obj=0x%llX  nameId=0x%08X  -> %s\n",
+		       found,
+		       i,
+		       (unsigned long long)obj,
+		       nameId,
+		       name.empty() ? "<invalid>" : name.c_str());
+		++found;
+	}
     // ── 4. 打印 Block[0] 开头，用眼睛确认一下 ──────────────────────────
     // 正常应该能看到 "None" 和 "ByteProperty"
-    printf("\n--- Block 0, first 0x80 bytes ---\n");
-    HexDump(block0, 0x80);
+    //printf("\n--- Block 0, first 0x80 bytes ---\n");
+    //HexDump(block0, 0x80);
 
     // ── 5. 试几个已知 NameId ───────────────────────────────────────────
     // 这几个名字是引擎启动时固定插入的，顺序通常不会变
-    printf("\n--- Try some known ids ---\n");
+    //printf("\n--- Try some known ids ---\n");
 
-    uint32_t knownIds[9] = { 0x00, 0x03, 0x0A, 0x11, 0x18, 0x20, 0x28, 0x2F, 0x38 };
-    for (int i = 0; i < 9; i++)
-    {
-        uint32_t id = knownIds[i];
-        std::string name = GetName(id);
+    //uint32_t knownIds[9] = { 0x00, 0x03, 0x0A, 0x11, 0x18, 0x20, 0x28, 0x2F, 0x38 };
+    //for (int i = 0; i < 9; i++)
+    //{
+    //    uint32_t id = knownIds[i];
+    //    std::string name = GetName(id);
 
-        if (name.empty())
-            printf("  id=0x%08X -> <invalid>\n", id);
-        else
-            printf("  id=0x%08X -> %s\n", id, name.c_str());
-    }
+    //    if (name.empty())
+    //        printf("  id=0x%08X -> <invalid>\n", id);
+    //    else
+    //        printf("  id=0x%08X -> %s\n", id, name.c_str());
+    //}
 
-    // ── 6. 遍历整个名字表 ──────────────────────────────────────────────
-    printf("\n--- List names (limit = %d) ---\n", PRINT_LIMIT);
-    PrintAllNames(PRINT_LIMIT);
+    //// ── 6. 遍历整个名字表 ──────────────────────────────────────────────
+    //printf("\n--- List names (limit = %d) ---\n", PRINT_LIMIT);
+    //PrintAllNames(PRINT_LIMIT);
 
-    // ── 7. 收尾 ────────────────────────────────────────────────────────
-    CloseHandle(g_process);     // 用完记得关（C++ 没有 GC）
-    g_process = NULL;
+    //// ── 7. 收尾 ────────────────────────────────────────────────────────
+    //CloseHandle(g_process);     // 用完记得关（C++ 没有 GC）
+    //g_process = NULL;
 
     Pause();
     return 0;
